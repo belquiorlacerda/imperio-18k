@@ -628,6 +628,7 @@
   const ARO = Array.from({ length: 14 }, (_, i) => String(12 + i));
   const COMP = ['45 cm', '50 cm', '60 cm'];
   const PULS = ['Pequeno (16 cm)', 'Médio (18 cm)', 'Grande (20 cm)'];
+  const PULS2 = ['18 cm', '19 cm', '20 cm', '21 cm', '22 cm', '23 cm'];
 
   const PRODUCTS = [
     { id: 'anel-escultural', name: 'Anel Escultural', cat: 'aneis', price: 109, img: 'assets/web/anel-escultural.jpg',
@@ -643,7 +644,25 @@
     { id: 'colar-golden-orbit', name: 'Colar Golden Orbit', cat: 'pingentes', price: 129, img: 'assets/web/colar-golden-orbit.jpg',
       desc: 'Pingente de anéis entrelaçados em corrente dupla delicada.', optLabel: 'Comprimento', options: COMP },
     { id: 'pulseira-curb', name: 'Pulseira Curb Chain', cat: 'pulseiras', price: 89, img: 'assets/web/banner.jpg',
-      desc: 'Pulseira de elos grumet volumosos, com visual marcante e moderno.', optLabel: 'Tamanho', options: PULS }
+      desc: 'Pulseira de elos grumet volumosos, com visual marcante e moderno.', optLabel: 'Tamanho', options: PULS },
+
+    /* Sem preço (price: null) = "Sob consulta": o cliente chama no WhatsApp. Para vender no carrinho, informe o preço. */
+    ...[
+      ['Pulseira Grumet Grossa', 'Elos grumet largos e fecho tipo caixa, para um visual imponente.'],
+      ['Pulseira Grumet Fina', 'Grumet delicada com fecho tipo caixa, elegante no dia a dia.'],
+      ['Pulseira Grumet Média', 'Grumet de espessura média, equilíbrio entre presença e conforto.'],
+      ['Pulseira Paperclip Fina', 'Pulseira de elos alongados estilo paperclip, leve e discreta.'],
+      ['Pulseira Grumet Slim', 'Grumet fina disponível em vários tamanhos, com fecho de segurança.'],
+      ['Pulseira Grumet Dupla', 'Grumet dupla com acabamento brilhante e fecho tipo caixa.'],
+      ['Pulseira Elo Cabo', 'Elos cabo com fecho tipo caixa e acabamento polido.'],
+      ['Pulseira Elo Cabo Clássica', 'Elos cabo clássicos, resistentes e com muito brilho.'],
+      ['Pulseira Grumet Pronta Entrega', 'Grumet média em pronta entrega, com fecho tipo caixa.'],
+      ['Pulseira Grumet Clássica', 'Grumet clássica com fecho tipo caixa e acabamento espelhado.'],
+      ['Pulseira Grumet Maxi 18K', 'Grumet encorpada com fecho gravado 18K, para quem gosta de peça marcante.']
+    ].map(([name, desc], i) => ({
+      id: 'pulseira-' + String(i + 1).padStart(2, '0'), name, cat: 'pulseiras', price: null,
+      img: 'assets/web/pulseira-' + String(i + 1).padStart(2, '0') + '.jpg', desc, optLabel: 'Tamanho', options: PULS2
+    }))
   ];
   const byId = Object.fromEntries(PRODUCTS.map(p => [p.id, p]));
 
@@ -691,8 +710,9 @@
 
   function renderGrid() {
     let list = PRODUCTS.filter(p => (state.cat === 'all' || p.cat === state.cat) && (!state.q || norm(p.name).includes(norm(state.q))));
-    if (state.sort === 'asc') list.sort((a, b) => a.price - b.price);
-    else if (state.sort === 'desc') list.sort((a, b) => b.price - a.price);
+    const pv = p => p.price == null ? Infinity : p.price;
+    if (state.sort === 'asc') list.sort((a, b) => (pv(a) === pv(b) ? 0 : pv(a) < pv(b) ? -1 : 1));
+    else if (state.sort === 'desc') list.sort((a, b) => (pv(a) === pv(b) ? 0 : pv(a) > pv(b) ? -1 : 1));
     else if (state.sort === 'az') list.sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
     $('#grid').innerHTML = list.length ? list.map(p => `
       <article class="card">
@@ -700,8 +720,10 @@
         <div class="card-body">
           <span class="tag">${esc(CATS[p.cat])}</span>
           <h3>${esc(p.name)}</h3>
-          <div class="price">${BRL.format(p.price)}</div>
-          <button class="btn btn-primary" type="button" data-quick="${p.id}">${p.options ? 'Escolher opções' : 'Adicionar ao carrinho'}</button>
+          <div class="price">${p.price == null ? 'Sob consulta' : BRL.format(p.price)}</div>
+          ${p.price == null
+            ? `<a class="btn btn-wa" href="${waLink('Olá! Tenho interesse na ' + p.name + '. Qual o valor e os tamanhos disponíveis?')}" target="_blank" rel="noopener">Consultar no WhatsApp</a>`
+            : `<button class="btn btn-primary" type="button" data-quick="${p.id}">${p.options ? 'Escolher opções' : 'Adicionar ao carrinho'}</button>`}
         </div>
       </article>`).join('') : `
       <div class="empty"><p>Nenhuma peça encontrada para a sua busca.</p>
@@ -724,7 +746,7 @@
     try {
       const raw = JSON.parse(localStorage.getItem(KEY) || '[]');
       if (!Array.isArray(raw)) return [];
-      return raw.filter(i => i && byId[i.id] && validOpt(byId[i.id], i.opt || ''))
+      return raw.filter(i => i && byId[i.id] && byId[i.id].price != null && validOpt(byId[i.id], i.opt || ''))
         .map(i => ({ id: i.id, opt: i.opt || '', qty: Math.min(CONFIG.maxQty, Math.max(1, parseInt(i.qty, 10) || 1)) }));
     } catch { return []; }
   }
@@ -800,21 +822,28 @@
         <div class="pd-info">
           <span class="tag" style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--gold-d);font-weight:600">${esc(CATS[p.cat])}</span>
           <h2>${esc(p.name)}</h2>
-          <div class="price">${BRL.format(p.price)}</div>
+          <div class="price">${p.price == null ? 'Sob consulta' : BRL.format(p.price)}</div>
           <p class="desc">${esc(p.desc)}</p>
           <ul class="pd-list"><li>Semijoia banhada a ouro 18K</li><li>Garantia</li><li>Enviamos para todo o Brasil</li></ul>
           ${p.options ? `<div><label class="lb" for="pdOpt">${esc(p.optLabel)}</label><select class="field-s" id="pdOpt" style="width:100%">${p.options.map(o => `<option>${esc(o)}</option>`).join('')}</select></div>` : ''}
-          <div><span class="lb">Quantidade</span><div class="qty"><button type="button" id="pdMinus" aria-label="Diminuir">&minus;</button><span id="pdQty">1</span><button type="button" id="pdPlus" aria-label="Aumentar">+</button></div></div>
+          <div${p.price == null ? ' hidden' : ''}><span class="lb">Quantidade</span><div class="qty"><button type="button" id="pdMinus" aria-label="Diminuir">&minus;</button><span id="pdQty">1</span><button type="button" id="pdPlus" aria-label="Aumentar">+</button></div></div>
           <div class="pd-actions">
-            <button class="btn btn-primary btn-block" id="pdAdd" type="button">Adicionar ao carrinho</button>
-            <a class="btn btn-outline btn-block" id="pdAsk" href="#" target="_blank" rel="noopener">Tirar dúvida no WhatsApp</a>
+            <button class="btn btn-primary btn-block" id="pdAdd" type="button"${p.price == null ? ' hidden' : ''}>Adicionar ao carrinho</button>
+            <a class="btn ${p.price == null ? 'btn-wa' : 'btn-outline'} btn-block" id="pdAsk" href="#" target="_blank" rel="noopener">${p.price == null ? 'Consultar valor no WhatsApp' : 'Tirar dúvida no WhatsApp'}</a>
           </div>
         </div>
       </div>`;
     const setQty = n => { qty = Math.min(CONFIG.maxQty, Math.max(1, n)); $('#pdQty').textContent = qty; };
     $('#pdMinus').onclick = () => setQty(qty - 1);
     $('#pdPlus').onclick = () => setQty(qty + 1);
-    $('#pdAsk').href = waLink('Olá! Tenho uma dúvida sobre: ' + p.name + ' (' + BRL.format(p.price) + ').');
+    const setAsk = () => {
+      const opt = p.options ? ' (' + p.optLabel + ': ' + $('#pdOpt').value + ')' : '';
+      $('#pdAsk').href = waLink(p.price == null
+        ? 'Olá! Tenho interesse na ' + p.name + opt + '. Qual o valor?'
+        : 'Olá! Tenho uma dúvida sobre: ' + p.name + ' (' + BRL.format(p.price) + ').');
+    };
+    setAsk();
+    if (p.options) $('#pdOpt').addEventListener('change', setAsk);
     $('#pdAdd').onclick = () => {
       const opt = p.options ? $('#pdOpt').value : '';
       addToCart(p.id, opt, qty); dlgProduct.close(); toast(p.name + ' adicionado ao carrinho');
